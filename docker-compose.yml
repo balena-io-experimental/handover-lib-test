@@ -1,0 +1,45 @@
+version: '2.1'
+
+services:
+  api:
+    build: .
+    # network_mode: host
+    privileged: true
+    # Putting always here works for all instances _except_ the handover, because the handover strategy implementation changes this so the service won't restat
+    # https://github.com/balena-os/balena-supervisor/blob/a89b23ac7c744befca46355245e9c7b51ed92861/src/compose/service-manager.ts#L633
+    restart: always
+    # ports:
+    #   - "8085:8085"
+    expose:
+      - "80"
+    environment:
+      - NODE_ENV=production
+    labels:
+      io.balena.update.strategy: hand-over
+      io.balena.update.handover-timeout: 60000
+    #   io.balena.features.dbus: '1'
+    #   io.balena.features.kernel-modules: '1'
+    #   io.balena.features.sysfs: '1'
+    #   io.balena.features.supervisor-api: '1'
+  haproxy:
+    build: lib/haproxy
+    healthcheck:
+      test: /bin/sh -c 'ls -la /proc/*/exe | grep -q /usr/local/sbin/haproxy'
+      interval: 60s
+      timeout: 10s
+      retries: 3
+    ports:
+      # haproxy/http
+      - "80:80/tcp"
+      # haproxy/tcp-router
+      - "443:443/tcp"
+      # haproxy/stats
+      - "1936:1936/tcp"
+      # Prometheus/metrics (ec2_sd_config)
+      - "9000:9000/tcp"
+      - "9001:9001/tcp"
+    # volumes:
+    #   - certs-data:/certs
+    sysctls:
+      net.ipv4.ip_unprivileged_port_start: 0
+    restart: unless-stopped
